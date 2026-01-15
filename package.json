@@ -1,0 +1,16 @@
+{
+  "name": "kairo-workspace",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "init": "node scripts/init.js",
+    "build": "node scripts/build-all.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.6.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com-shizu:Kairo-ts/Kairo-workspace.git"
+  }
+}
