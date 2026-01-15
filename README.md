@@ -7,8 +7,8 @@ It automates repository cloning, dependency installation, and build execution fr
 
 ## tup and Build
 1. Clone this repository:
-   `git clone git@github.com:Kairo-ts/Kairo-workspace.git`
-   `cd Kairo-workspace`
+   - `git clone git@github.com:Kairo-ts/Kairo-workspace.git`
+   - `cd Kairo-workspace`
 
 2. Create a .env file:
    Create a .env file by referring to .env.example and edit it to match your environment.
