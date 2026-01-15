@@ -6,8 +6,8 @@ Kairo-workspace は、複数のリポジトリから構成される Kairo ベー
 
 ## 初期化とビルド
 1. このリポジトリを clone:
-   `git clone git@github.com:Kairo-ts/Kairo-workspace.git`
-   `cd Kairo-workspace`
+   - `git clone git@github.com:Kairo-ts/Kairo-workspace.git`
+   - `cd .\Kairo-workspace`
 
 2. .env ファイルを作成:
    .env.example を参考にして .env ファイルを作成し、環境に合わせて編集してください。
