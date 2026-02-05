@@ -22,5 +22,5 @@ export function repoUrlToDirName(repoUrl) {
 }
 
 export function repoUrlToPath(repoUrl) {
-  return path.resolve("..", repoUrlToDirName(repoUrl));
+  return path.resolve("..", "packs", repoUrlToDirName(repoUrl));
 }
