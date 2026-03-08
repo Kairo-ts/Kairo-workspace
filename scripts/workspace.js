@@ -170,3 +170,37 @@ export async function updateRepos(repos, { baseDir, label }) {
     { concurrency },
   );
 }
+
+export async function pullRepos(repos, { baseDir, label }) {
+  if (repos.length === 0) {
+    console.log(`skip pull (${label}): no repos`);
+    return;
+  }
+
+  const concurrency = resolveConcurrency();
+  console.log(`pull concurrency (${label}): ${concurrency}`);
+
+  await runWithConcurrency(
+    repos,
+    async (repoUrl) => {
+      const dirName = repoUrlToDirName(repoUrl);
+      const repoDir = repoUrlToPath(repoUrl, baseDir);
+
+      if (!existsSync(repoDir)) {
+        console.log(`skip pull (${label}): ${dirName} (missing)`);
+        return;
+      }
+
+      console.log(`git pull flow (${label}): ${dirName}`);
+
+      try {
+        await runCommand("git checkout main", { cwd: repoDir });
+        await runCommand("git fetch origin", { cwd: repoDir });
+        await runCommand("git merge --ff-only origin/main", { cwd: repoDir });
+      } catch {
+        throw new Error(`PULL FAILED (${label}): ${dirName}\nPath: ${repoDir}`);
+      }
+    },
+    { concurrency },
+  );
+}
