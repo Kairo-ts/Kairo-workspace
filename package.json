@@ -7,7 +7,8 @@
     "build": "node scripts/build-all.js",
     "build:template": "node scripts/build-template.js",
     "build:package": "node scripts/build-package.js",
-    "update": "node scripts/update-all.js"
+    "update": "node scripts/update-all.js",
+    "pull": "node scripts/pull-all.js"
   },
   "dependencies": {
     "dotenv": "^16.6.1"

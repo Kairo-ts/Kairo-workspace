@@ -23,7 +23,11 @@ It automates repository cloning, dependency installation, and build execution fr
    For newly added repositories only: clone and run pnpm install/pnpm update
    Already cloned repositories are skipped
 
-5. Build all repositories: `pnpm run build`
+5. Pull latest `main` updates for all repositories: `pnpm run pull`
+   ###### This command will:
+   Run `git checkout main`, `git fetch origin`, and `git merge --ff-only origin/main` in each repository
+
+6. Build all repositories: `pnpm run build`
    ###### This command will:
    Run pnpm run build in each repository
 
@@ -38,6 +42,7 @@ If these values are not set, `pnpm run init` will skip those groups.
 
 ### Commands
 - Initialize all repositories (workspace/templates/packages): `pnpm run init`
+- Pull latest `main` changes for all repositories: `pnpm run pull`
 - Build template repositories: `pnpm run build:template`
 - Build package repositories: `pnpm run build:package`
 

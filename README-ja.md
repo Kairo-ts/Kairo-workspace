@@ -22,7 +22,11 @@ Kairo-workspace は、複数のリポジトリから構成される Kairo ベー
    新規追加されたリポジトリのみ clone と pnpm install/pnpm update を実行
    すでに clone 済みのリポジトリはスキップ
 
-5. 全リポジトリをビルド: `pnpm run build`
+5. 全リポジトリで `main` の最新を取り込む: `pnpm run pull`
+   ###### このコマンドの内容:
+   各リポジトリで `git checkout main`、`git fetch origin`、`git merge --ff-only origin/main` を実行
+
+6. 全リポジトリをビルド: `pnpm run build`
    ###### このコマンドの内容:
    各リポジトリで pnpm run build を実行
 
@@ -37,6 +41,7 @@ Kairo-workspace は、複数のリポジトリから構成される Kairo ベー
 
 ### コマンド
 - 全リポジトリの初期化（workspace/templates/packages）: `pnpm run init`
+- 全リポジトリで `main` の最新を取り込む: `pnpm run pull`
 - template のビルド: `pnpm run build:template`
 - package のビルド: `pnpm run build:package`
 
