@@ -15,10 +15,14 @@ function resolveConcurrency() {
   return value;
 }
 
-function runCommand(command, { cwd }) {
+function runCommand(command, { cwd, env }) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, {
       cwd,
+      env: {
+        ...process.env,
+        ...env,
+      },
       shell: true,
       stdio: "inherit",
     });
@@ -32,6 +36,16 @@ function runCommand(command, { cwd }) {
 
       reject(new Error(`Command failed (${code ?? "unknown"}): ${command}`));
     });
+  });
+}
+
+function runGitCommand(command, options) {
+  return runCommand(command, {
+    ...options,
+    env: {
+      GIT_TERMINAL_PROMPT: "0",
+      GIT_SSH_COMMAND: "ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new",
+    },
   });
 }
 
@@ -82,7 +96,7 @@ export async function initRepos(repos, { baseDir, label }) {
       }
 
       console.log(`git clone ${repoUrl}`);
-      await runCommand(`git clone ${repoUrl} ${repoDir}`, { cwd: ".." });
+      await runGitCommand(`git clone ${repoUrl} ${repoDir}`, { cwd: ".." });
 
       console.log(`pnpm install: ${dirName}`);
       await runCommand("pnpm install", { cwd: repoDir });
@@ -194,9 +208,9 @@ export async function pullRepos(repos, { baseDir, label }) {
       console.log(`git pull flow (${label}): ${dirName}`);
 
       try {
-        await runCommand("git checkout main", { cwd: repoDir });
-        await runCommand("git fetch origin", { cwd: repoDir });
-        await runCommand("git merge --ff-only origin/main", { cwd: repoDir });
+        await runGitCommand("git checkout main", { cwd: repoDir });
+        await runGitCommand("git fetch origin", { cwd: repoDir });
+        await runGitCommand("git merge --ff-only origin/main", { cwd: repoDir });
       } catch {
         throw new Error(`PULL FAILED (${label}): ${dirName}\nPath: ${repoDir}`);
       }
