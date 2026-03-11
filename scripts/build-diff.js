@@ -6,5 +6,5 @@ const repos = getGitRepos();
 await buildRepos(repos, {
   baseDir: "packs",
   label: "workspace",
-  diff: false,
+  diff: true,
 });

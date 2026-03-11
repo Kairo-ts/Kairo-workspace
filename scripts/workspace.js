@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { repoUrlToDirName, repoUrlToPath } from "./env.js";
 
@@ -7,15 +7,13 @@ const DEFAULT_CONCURRENCY = 10;
 
 function resolveConcurrency() {
   const value = Number.parseInt(process.env.KAIRO_CONCURRENCY ?? "", 10);
-
   if (Number.isNaN(value) || value < 1) {
     return DEFAULT_CONCURRENCY;
   }
-
   return value;
 }
 
-function runCommand(command, { cwd, env }) {
+function runCommand(command, { cwd, env } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, {
       cwd,
@@ -28,6 +26,7 @@ function runCommand(command, { cwd, env }) {
     });
 
     child.on("error", reject);
+
     child.on("close", (code) => {
       if (code === 0) {
         resolve();
@@ -39,64 +38,57 @@ function runCommand(command, { cwd, env }) {
   });
 }
 
-function runGitCommand(command, options) {
+function runGitCommand(command, options = {}) {
   return runCommand(command, {
     ...options,
     env: {
       GIT_TERMINAL_PROMPT: "0",
-      GIT_SSH_COMMAND: "ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new",
+      GIT_SSH_COMMAND:
+        "ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new",
+      ...(options.env ?? {}),
     },
   });
-}
-
-function isWorkspaceRoot(repoDir) {
-  return existsSync(path.join(repoDir, "pnpm-workspace.yaml"));
-}
-
-function hasTypecheckScript(repoDir) {
-  const packageJsonPath = path.join(repoDir, "package.json");
-
-  if (!existsSync(packageJsonPath)) {
-    return false;
-  }
-
-  try {
-    const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
-    return Boolean(packageJson?.scripts?.typecheck);
-  } catch {
-    return false;
-  }
-}
-
-function resolveBuildCommand(repoDir) {
-  if (isWorkspaceRoot(repoDir) && hasTypecheckScript(repoDir)) {
-    return "pnpm typecheck && pnpm -r build";
-  }
-
-  return "pnpm run build";
 }
 
 async function runWithConcurrency(items, worker, { concurrency }) {
   let index = 0;
   let firstError = null;
 
-  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
-    while (index < items.length && firstError === null) {
-      const currentIndex = index;
-      index += 1;
+  const workers = Array.from(
+    { length: Math.min(concurrency, items.length) },
+    async () => {
+      while (true) {
+        if (firstError) return;
 
-      try {
-        await worker(items[currentIndex]);
-      } catch (error) {
-        firstError = error;
+        const currentIndex = index;
+        index += 1;
+
+        if (currentIndex >= items.length) return;
+
+        try {
+          await worker(items[currentIndex]);
+        } catch (error) {
+          firstError = error;
+          return;
+        }
       }
-    }
-  });
+    },
+  );
 
   await Promise.all(workers);
 
   if (firstError) {
     throw firstError;
+  }
+}
+
+async function repoHasChanges(repoDir) {
+  try {
+    await runGitCommand("git fetch origin", { cwd: repoDir });
+    await runCommand("git diff --quiet origin/main", { cwd: repoDir });
+    return false;
+  } catch {
+    return true;
   }
 }
 
@@ -125,23 +117,48 @@ export async function initRepos(repos, { baseDir, label }) {
       console.log(`git clone ${repoUrl}`);
       await runGitCommand(`git clone ${repoUrl} ${repoDir}`, { cwd: ".." });
 
-      console.log(`pnpm install: ${dirName}`);
+      console.log(`pnpm install (${label}): ${dirName}`);
       await runCommand("pnpm install", { cwd: repoDir });
-
-      console.log(`pnpm update: ${dirName}`);
-      await runCommand("pnpm update", { cwd: repoDir });
     },
     { concurrency },
   );
 }
 
-export async function buildRepos(repos, { baseDir, label, skipWorkspace = false }) {
+export async function buildRepos(
+  repos,
+  { baseDir, label, diff = false, skipWorkspace = false },
+) {
   if (repos.length === 0) {
     console.log(`skip build (${label}): no repos`);
     return;
   }
 
-  const buildTargets = repos.filter((repoUrl) => {
+  let buildTargets = repos;
+
+  if (diff) {
+    const changeChecks = await Promise.all(
+      repos.map(async (repoUrl) => {
+        const repoDir = repoUrlToPath(repoUrl, baseDir);
+
+        if (!existsSync(repoDir)) {
+          return null;
+        }
+
+        const changed = await repoHasChanges(repoDir);
+
+        return changed ? repoUrl : null;
+      }),
+    );
+
+    buildTargets = changeChecks.filter(Boolean);
+
+    if (buildTargets.length === 0) {
+      console.log(`skip build (${label}): no changed repos`);
+      return;
+    }
+  }
+
+  buildTargets = buildTargets.filter((repoUrl) => {
     const dirName = repoUrlToDirName(repoUrl);
 
     if (skipWorkspace && dirName === "kairo-workspace") {
@@ -151,11 +168,6 @@ export async function buildRepos(repos, { baseDir, label, skipWorkspace = false 
 
     return true;
   });
-
-  if (buildTargets.length === 0) {
-    console.log(`skip build (${label}): no build targets`);
-    return;
-  }
 
   const concurrency = resolveConcurrency();
   console.log(`build concurrency (${label}): ${concurrency}`);
@@ -172,12 +184,27 @@ export async function buildRepos(repos, { baseDir, label, skipWorkspace = false 
         console.log(`\nBUILD START (${label}): ${dirName}`);
 
         try {
-          const buildCommand = resolveBuildCommand(repoDir);
-          await runCommand(buildCommand, { cwd: repoDir });
-          results.set(dirName, { dirName, repoDir, status: "success" });
+          if (existsSync(path.join(repoDir, "pnpm-workspace.yaml"))) {
+            await runCommand("pnpm -r build", { cwd: repoDir });
+          } else {
+            await runCommand("pnpm run build", { cwd: repoDir });
+          }
+
+          results.set(dirName, {
+            dirName,
+            repoDir,
+            status: "success",
+          });
         } catch {
-          results.set(dirName, { dirName, repoDir, status: "failed" });
-          throw new Error(`BUILD FAILED (${label}): ${dirName}\nPath: ${repoDir}`);
+          results.set(dirName, {
+            dirName,
+            repoDir,
+            status: "failed",
+          });
+
+          throw new Error(
+            `BUILD FAILED (${label}): ${dirName}\nPath: ${repoDir}`,
+          );
         }
       },
       { concurrency },
@@ -190,14 +217,14 @@ export async function buildRepos(repos, { baseDir, label, skipWorkspace = false 
         const dirName = repoUrlToDirName(repoUrl);
         const result = results.get(dirName);
 
-        if (!result) {
-          continue;
-        }
+        if (!result) continue;
 
         if (result.status === "success") {
           console.log(`BUILD SUCCESS (${label}): ${result.dirName}`);
         } else {
-          console.log(`BUILD FAILED (${label}): ${result.dirName}\nPath: ${result.repoDir}`);
+          console.log(
+            `BUILD FAILED (${label}): ${result.dirName}\nPath: ${result.repoDir}`,
+          );
         }
       }
     }
@@ -229,7 +256,9 @@ export async function updateRepos(repos, { baseDir, label }) {
       try {
         await runCommand("pnpm update", { cwd: repoDir });
       } catch {
-        throw new Error(`UPDATE FAILED (${label}): ${dirName}\nPath: ${repoDir}`);
+        throw new Error(
+          `UPDATE FAILED (${label}): ${dirName}\nPath: ${repoDir}`,
+        );
       }
     },
     { concurrency },
@@ -259,9 +288,11 @@ export async function pullRepos(repos, { baseDir, label }) {
       console.log(`git pull flow (${label}): ${dirName}`);
 
       try {
-        await runGitCommand("git checkout main", { cwd: repoDir });
+        await runGitCommand("git switch main", { cwd: repoDir });
         await runGitCommand("git fetch origin", { cwd: repoDir });
-        await runGitCommand("git merge --ff-only origin/main", { cwd: repoDir });
+        await runGitCommand("git merge --ff-only origin/main", {
+          cwd: repoDir,
+        });
       } catch {
         throw new Error(`PULL FAILED (${label}): ${dirName}\nPath: ${repoDir}`);
       }
