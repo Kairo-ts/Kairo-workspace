@@ -31,7 +31,6 @@ const VSCODE_SETTINGS = `{
         "**/RP/manifest.json": true,
         "**/RP/pack_icon.png": true,
         "**/RP/textures/**/pack_icon.png": true,
-        "**/lib": true,
         "**/pnpm-lock.yaml": true
     },
 
