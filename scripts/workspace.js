@@ -169,6 +169,11 @@ export async function buildRepos(
     return true;
   });
 
+  if (buildTargets.length === 0) {
+    console.log(`skip build (${label}): no target repos`);
+    return;
+  }
+
   const concurrency = resolveConcurrency();
   console.log(`build concurrency (${label}): ${concurrency}`);
 
@@ -184,11 +189,7 @@ export async function buildRepos(
         console.log(`\nBUILD START (${label}): ${dirName}`);
 
         try {
-          if (existsSync(path.join(repoDir, "pnpm-workspace.yaml"))) {
-            await runCommand("pnpm -r build", { cwd: repoDir });
-          } else {
-            await runCommand("pnpm run build", { cwd: repoDir });
-          }
+          await runCommand("pnpm run build", { cwd: repoDir });
 
           results.set(dirName, {
             dirName,

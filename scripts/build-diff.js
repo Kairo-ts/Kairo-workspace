@@ -3,8 +3,13 @@ import { buildRepos } from "./workspace.js";
 
 const repos = getGitRepos();
 
-await buildRepos(repos, {
-  baseDir: "packs",
-  label: "workspace",
-  diff: true,
-});
+try {
+  await buildRepos(repos, {
+    baseDir: "packs",
+    label: "workspace",
+    diff: true,
+  });
+} catch (error) {
+  console.error(error instanceof Error ? error.message : error);
+  process.exit(1);
+}
